@@ -9,7 +9,7 @@ Source: [Swiss eMobility — Charging Price Map](https://opendata.swiss/en/datas
 1. Create the public GitHub repository `platinumvortex/ev-money-saver-data` and push this directory to its default branch.
 2. In **Settings → Secrets and variables → Actions**, add the repository secret `CHARGEPRICE_API_KEY`. Obtain access through the source documentation; never commit the key.
 3. In **Settings → Pages**, select **GitHub Actions** as the source.
-4. Run **Update Swiss charging prices** once from the Actions tab. The scheduled job then runs daily at 03:17 UTC.
+4. Run **Update Swiss charging prices** once from the Actions tab. The scheduled job then runs daily at 03:17 UTC. Without the secret, the workflow publishes the informational page with a waiting status but cannot populate prices.
 
 The published feed URL expected by the extension is:
 
