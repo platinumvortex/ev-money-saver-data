@@ -2,7 +2,8 @@
   "data": [
     {"id":"direct","attributes":{"country_code":"CH","evse_id":"CH*ABC*E1","currency":"CHF","elements":[{"price_components":[{"type":"ENERGY","price":0.45,"step_size":1}],"restrictions":{"start_time":null,"end_time":null,"min_duration":null,"max_duration":null}}]},"relationships":{"tariff":{"data":{"type":"tariff","id":"direct-tariff"}},"emp":{"data":{"type":"company","id":"operator"}}}},
     {"id":"subscription","attributes":{"country_code":"CH","evse_id":"CH*ABC*E2","currency":"CHF","elements":[{"price_components":[{"type":"ENERGY","price":0.25,"step_size":1}],"restrictions":{}}]},"relationships":{"tariff":{"data":{"type":"tariff","id":"subscription-tariff"}},"emp":{"data":{"type":"company","id":"operator"}}}},
-    {"id":"conditional","attributes":{"country_code":"CH","evse_id":"CH*ABC*E3","currency":"CHF","elements":[{"price_components":[{"type":"ENERGY","price":0.55,"step_size":1}],"restrictions":{"start_time":"08:00:00"}}]},"relationships":{"tariff":{"data":{"type":"tariff","id":"direct-tariff"}},"emp":{"data":{"type":"company","id":"operator"}}}}
+    {"id":"conditional","attributes":{"country_code":"CH","evse_id":"CH*ABC*E3","currency":"CHF","elements":[{"price_components":[{"type":"ENERGY","price":0.55,"step_size":1}],"restrictions":{"start_time":"08:00:00"}}]},"relationships":{"tariff":{"data":{"type":"tariff","id":"direct-tariff"}},"emp":{"data":{"type":"company","id":"operator"}}}},
+    {"id":"zero-price","attributes":{"country_code":"CH","evse_id":"CH*ABC*E4","currency":"CHF","elements":[{"price_components":[{"type":"ENERGY","price":0,"step_size":1}],"restrictions":{}}]},"relationships":{"tariff":{"data":{"type":"tariff","id":"direct-tariff"}},"emp":{"data":{"type":"company","id":"operator"}}}}
   ],
   "included": [
     {"type":"tariff","id":"direct-tariff","attributes":{"name":"Direct","is_direct_payment":true}},

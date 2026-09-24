@@ -22,7 +22,7 @@ export function buildFeed(payload,retrievedAt=new Date().toISOString()){
       if(Object.entries(restrictions).some(([key,value])=>value!==null&&value!==undefined&&!['min_duration','max_duration'].includes(key)))complete=false;
       if(!Array.isArray(element.price_components)||!element.price_components.length)complete=false;
       for(const component of element.price_components||[]){
-        if(!allowedTypes.has(component.type)||!Number.isFinite(component.price)||component.price<0)complete=false;
+        if(!allowedTypes.has(component.type)||!Number.isFinite(component.price)||component.price<0||(component.type==='ENERGY'&&component.price<=0))complete=false;
         if(!['TIME','PARKING_TIME'].includes(component.type)&&(restrictions.min_duration!=null||restrictions.max_duration!=null))complete=false;
         const step=component.step_size??(component.type==='ENERGY'?1:60),from=restrictions.min_duration??0,until=restrictions.max_duration??null;
         if(!Number.isFinite(step)||step<=0||!Number.isFinite(from)||from<0||(until!==null&&(!Number.isFinite(until)||until<=from)))complete=false;
