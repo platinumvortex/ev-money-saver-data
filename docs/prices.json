@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "provider": "swiss-emobility-charging-price-map",
+  "retrievedAt": "1970-01-01T00:00:00.000Z",
+  "tariffCount": 0,
+  "evseCount": 0,
+  "license": "O-By-Ask; attribution required; commercial use requires prior permission from Swiss eMobility",
+  "source": {
+    "author": "Swiss eMobility",
+    "title": "Charging Price Map Swiss eMobility",
+    "url": "https://opendata.swiss/en/dataset/ladepreiskarte-swiss-emobility"
+  },
+  "tariffs": []
+}

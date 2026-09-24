@@ -1,0 +1,46 @@
+name: Update Swiss charging prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download official price data
+        env:
+          CHARGEPRICE_API_KEY: ${{ secrets.CHARGEPRICE_API_KEY }}
+        run: >-
+          curl --fail --silent --show-error
+          --header "API-Key: ${CHARGEPRICE_API_KEY}"
+          --header "Accept: application/json"
+          https://api.chargeprice.app/v1/opendata/charging_prices_ch
+          --output "$RUNNER_TEMP/upstream.json"
+      - name: Build direct-payment feed
+        run: node scripts/build-feed.mjs "$RUNNER_TEMP/upstream.json" docs/prices.json
+      - run: npm test
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
