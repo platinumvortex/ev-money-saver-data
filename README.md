@@ -27,6 +27,12 @@ export CHARGEPRICE_API_KEY='your-key'
 ./scripts/update-prices-mac.sh
 ```
 
-The script downloads the upstream response, validates and filters it with the same feed builder used by GitHub Actions, runs the tests, and commits only a changed `docs/prices.json`. The API key is never written to disk or committed. It refuses to run with uncommitted local changes and does not replace the previous feed when the upstream data is invalid.
+For an unattended Mac run, save the key once in the logged-in user's Keychain instead of placing it in a shell profile or scheduler file:
+
+```sh
+security add-generic-password -a "$USER" -s 'EV Money Saver Chargeprice API Key' -w 'your-key' -U
+```
+
+The script then reads that Keychain entry automatically. It downloads the upstream response, validates and filters it with the same feed builder used by GitHub Actions, runs the tests, and commits only a changed `docs/prices.json`. The API key is never written to disk or committed. It refuses to run with uncommitted local changes and does not replace the previous feed when the upstream data is invalid.
 
 Do not run this local updater more than once per day: the upstream service documents a two-requests-per-24-hours-per-IP limit. A paid product still requires the source owner's written commercial-use permission.

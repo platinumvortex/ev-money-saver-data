@@ -12,9 +12,16 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 api_key="${CHARGEPRICE_API_KEY:-}"
 
+# On macOS, a saved Keychain entry lets the script run unattended without
+# placing the source key in a shell profile, LaunchAgent file, or repository.
+if [[ -z "$api_key" ]] && command -v security >/dev/null 2>&1; then
+  api_key="$(security find-generic-password -a "$USER" -s 'EV Money Saver Chargeprice API Key' -w 2>/dev/null || true)"
+fi
+
 if [[ -z "$api_key" ]]; then
   printf '%s\n' 'CHARGEPRICE_API_KEY is not set.' >&2
   printf '%s\n' 'Run: export CHARGEPRICE_API_KEY="your-key"' >&2
+  printf '%s\n' "Or save it in macOS Keychain: security add-generic-password -a \"\$USER\" -s 'EV Money Saver Chargeprice API Key' -w 'your-key' -U" >&2
   exit 1
 fi
 
