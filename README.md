@@ -16,3 +16,17 @@ The published feed URL expected by the extension is:
 `https://platinumvortex.github.io/ev-money-saver-data/prices.json`
 
 The workflow uses one upstream request per day, below the documented limit of two requests per 24 hours per IP address. It refuses to publish an empty or structurally invalid feed, so the last successful GitHub Pages deployment remains available if the upstream format changes.
+
+## Update from a Mac
+
+GitHub Actions is already the preferred automatic daily updater. If you want a local backup or a manual refresh, clone this repository on the Mac, authenticate Git, and run:
+
+```sh
+cd /path/to/ev-money-saver-data
+export CHARGEPRICE_API_KEY='your-key'
+./scripts/update-prices-mac.sh
+```
+
+The script downloads the upstream response, validates and filters it with the same feed builder used by GitHub Actions, runs the tests, and commits only a changed `docs/prices.json`. The API key is never written to disk or committed. It refuses to run with uncommitted local changes and does not replace the previous feed when the upstream data is invalid.
+
+Do not run this local updater more than once per day: the upstream service documents a two-requests-per-24-hours-per-IP limit. A paid product still requires the source owner's written commercial-use permission.
