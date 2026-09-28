@@ -40,6 +40,14 @@ jobs:
       - name: Build direct-payment feed
         if: env.CHARGEPRICE_API_KEY != ''
         run: node scripts/build-feed.mjs "$RUNNER_TEMP/upstream.json" docs/prices.json
+      - name: Download official Swiss station data
+        run: >-
+          curl --fail --silent --show-error --location
+          --retry 3 --retry-delay 10 --max-time 180
+          https://data.geo.admin.ch/ch.bfe.ladestellen-elektromobilitaet/data/ch.bfe.ladestellen-elektromobilitaet.json
+          --output "$RUNNER_TEMP/stations.json"
+      - name: Validate station data before publishing
+        run: node scripts/validate-stations.mjs "$RUNNER_TEMP/stations.json" docs/stations.json
       - run: npm test
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

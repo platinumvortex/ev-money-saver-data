@@ -1,6 +1,6 @@
 # EV Money Saver data feed
 
-This small GitHub Pages project refreshes the official Swiss eMobility Charging Price Map once per day and publishes `docs/prices.json` for EV Money Saver. The output contains supported CHF direct-payment tariffs only. Subscription, membership, roaming, foreign-currency and unsupported conditional tariffs are omitted.
+This small GitHub Pages project refreshes the official Swiss eMobility Charging Price Map and the federal Swiss charging-station catalogue once per day. It publishes `prices.json` and `stations.json` for EV Money Saver. Price output contains supported CHF direct-payment tariffs only. Subscription, membership, roaming, foreign-currency and unsupported conditional tariffs are omitted.
 
 Source: [Swiss eMobility — Charging Price Map](https://opendata.swiss/en/dataset/ladepreiskarte-swiss-emobility). The O-By-Ask licence requires attribution. Non-commercial use is permitted; obtain Swiss eMobility's prior permission before commercial use.
 
@@ -15,7 +15,11 @@ The published feed URL expected by the extension is:
 
 `https://platinumvortex.github.io/ev-money-saver-data/prices.json`
 
-The workflow uses one upstream request per day, below the documented limit of two requests per 24 hours per IP address. It refuses to publish an empty or structurally invalid feed, so the last successful GitHub Pages deployment remains available if the upstream format changes.
+The station feed is published at:
+
+`https://platinumvortex.github.io/ev-money-saver-data/stations.json`
+
+The workflow uses one price request per day, below the documented limit of two requests per 24 hours per IP address. It validates both feeds and refuses to publish an empty, partial or structurally invalid result, so the last successful GitHub Pages deployment remains available if either upstream format changes.
 
 ## Update from a Mac
 

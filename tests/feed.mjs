@@ -1,6 +1,8 @@
 import assert from 'assert';
 import fs from 'fs';
+import {gzipSync} from 'node:zlib';
 import {buildFeed} from '../scripts/build-feed.mjs';
+import {validateStationPayload} from '../scripts/validate-stations.mjs';
 
 const fixture=JSON.parse(fs.readFileSync(new URL('./fixture.json',import.meta.url)));
 const feed=buildFeed(fixture,'2026-09-24T12:00:00Z');
@@ -11,4 +13,8 @@ assert.equal(feed.tariffs[0].directPayment,true);
 assert.equal(feed.tariffs[0].components[0].price,0.45);
 assert.equal(feed.tariffs[0].verifiedAt,'2026-09-24T12:00:00.000Z');
 assert.ok(feed.tariffs.every(tariff=>tariff.components.every(component=>component.type!=='ENERGY'||component.price>0)));
+const station={EVSEData:[{EVSEDataRecord:[{EvseID:'CH*TEST*E1'}]}]};
+assert.deepEqual(validateStationPayload(gzipSync(JSON.stringify(station)),1),{records:1,evseIds:1});
+assert.throws(()=>validateStationPayload(Buffer.from('{}'),1));
 console.log('✓ Feed publishes supported Swiss direct-payment tariffs only');
+console.log('✓ Federal station payload is validated before publication');
