@@ -31,7 +31,7 @@ export function buildFeed(payload,retrievedAt=new Date().toISOString()){
     }
     if(!complete)continue;
     const sourceTime=Date.parse(attributes.updated_at),updatedAt=Number.isFinite(sourceTime)?new Date(sourceTime).toISOString():new Date(retrieved).toISOString();
-    tariffs.push({id:String(record.id),evseId:attributes.evse_id,currency:'CHF',components,complete:true,directPayment:true,name:String(tariff?.name||emp?.name||'Direct payment').slice(0,120),updatedAt,timestampKind:Number.isFinite(sourceTime)?'source update':'retrieved'});
+    tariffs.push({id:String(record.id),evseId:attributes.evse_id,currency:'CHF',components,complete:true,directPayment:true,name:String(tariff?.name||emp?.name||'Direct payment').slice(0,120),updatedAt,verifiedAt:new Date(retrieved).toISOString(),timestampKind:'verified'});
   }
   const unique=new Map();
   for(const item of tariffs)if(!unique.has(item.id))unique.set(item.id,item);

@@ -9,5 +9,6 @@ assert.equal(feed.evseCount,1);
 assert.equal(feed.tariffs[0].id,'direct');
 assert.equal(feed.tariffs[0].directPayment,true);
 assert.equal(feed.tariffs[0].components[0].price,0.45);
+assert.equal(feed.tariffs[0].verifiedAt,'2026-09-24T12:00:00.000Z');
 assert.ok(feed.tariffs.every(tariff=>tariff.components.every(component=>component.type!=='ENERGY'||component.price>0)));
 console.log('✓ Feed publishes supported Swiss direct-payment tariffs only');
