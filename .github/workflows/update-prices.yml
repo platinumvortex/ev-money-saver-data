@@ -8,9 +8,10 @@ on:
     - cron: '17 3 * * *'
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
   group: pages
@@ -19,8 +20,10 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       CHARGEPRICE_API_KEY: ${{ secrets.CHARGEPRICE_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -29,17 +32,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # GitHub disables scheduled workflows after 60 days without repository activity.
+      - name: Keep the daily schedule enabled
+        continue-on-error: true
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/update-prices.yml/enable"
       - name: Download official price data
         if: env.CHARGEPRICE_API_KEY != ''
+        continue-on-error: true
         run: >-
           curl --fail --silent --show-error
+          --retry 3 --retry-delay 20 --max-time 180
           --header "API-Key: ${CHARGEPRICE_API_KEY}"
           --header "Accept: application/json"
           https://api.chargeprice.app/v1/opendata/charging_prices_ch
           --output "$RUNNER_TEMP/upstream.json"
-      - name: Build direct-payment feed
-        if: env.CHARGEPRICE_API_KEY != ''
-        run: node scripts/build-feed.mjs "$RUNNER_TEMP/upstream.json" docs/prices.json
+      # Unchanged format for installed extensions up to 1.10.x. Keeps the last published copy if the download failed.
+      - name: Build version 1 direct-payment feed
+        continue-on-error: true
+        run: |
+          if [ -s "$RUNNER_TEMP/upstream.json" ]; then
+            node scripts/build-feed.mjs "$RUNNER_TEMP/upstream.json" docs/prices.json
+          else
+            curl --fail --silent --show-error --max-time 120 https://platinumvortex.github.io/ev-money-saver-data/prices.json --output docs/prices.json
+          fi
       - name: Download official Swiss station data
         run: >-
           curl --fail --silent --show-error --location
@@ -48,6 +63,15 @@ jobs:
           --output "$RUNNER_TEMP/stations.json"
       - name: Validate station data before publishing
         run: node scripts/validate-stations.mjs "$RUNNER_TEMP/stations.json" docs/stations.json
+      # `shell: bash` adds pipefail, so a failed build stops the job before the last good feed is replaced.
+      - name: Build combined price feed (Chargeprice, eCarUp, operator pages)
+        shell: bash
+        run: >-
+          node scripts/build-v2.mjs
+          --stations "$RUNNER_TEMP/stations.json"
+          --chargeprice "$RUNNER_TEMP/upstream.json"
+          --out docs/prices-v2.json
+          | tee -a "$GITHUB_STEP_SUMMARY"
       - run: npm test
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -56,3 +80,16 @@ jobs:
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      # A second, independent copy served by jsDelivr, used by the extension if GitHub Pages is unreachable.
+      - name: Mirror feed files to the feed branch
+        continue-on-error: true
+        run: |
+          mirror="$RUNNER_TEMP/mirror"
+          mkdir -p "$mirror"
+          cp docs/prices.json docs/prices-v2.json docs/stations.json "$mirror/"
+          cd "$mirror"
+          git init -q -b feed
+          git add .
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -qm "Feed $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" feed
+          curl --silent --max-time 30 "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@feed/prices-v2.json" > /dev/null || true

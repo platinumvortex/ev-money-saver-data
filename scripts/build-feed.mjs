@@ -3,8 +3,12 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const allowedTypes=new Set(['ENERGY','FLAT','TIME','PARKING_TIME']);
+// Ad-hoc app tariffs that need only a free app account, no subscription or membership fee.
+// TCS eCharge mirrors Swisscharge prices for members and is deliberately excluded.
+export const APP_TARIFFS=new Map([['Swisscharge','Swisscharge app'],['Electra','Electra app']]);
 
-export function buildFeed(payload,retrievedAt=new Date().toISOString()){
+// Normalizes every supported Swiss tariff. `payment` is 'direct' (card/QR at the charger) or 'app'.
+export function chargepriceTariffs(payload,retrievedAt=new Date().toISOString()){
   if(!Array.isArray(payload?.data))throw new Error('The upstream response has no data array.');
   const retrieved=Date.parse(retrievedAt);
   if(!Number.isFinite(retrieved))throw new Error('A valid retrieval time is required.');
@@ -14,7 +18,8 @@ export function buildFeed(payload,retrievedAt=new Date().toISOString()){
   for(const record of payload.data){
     const attributes=record.attributes||{},tariff=relation(record,'tariff'),emp=relation(record,'emp');
     const direct=typeof tariff?.is_direct_payment==='boolean'?tariff.is_direct_payment:emp?.is_direct_payment===true;
-    if(!direct||attributes.country_code!=='CH'||attributes.currency!=='CHF'||typeof attributes.evse_id!=='string'||!attributes.evse_id)continue;
+    const app=!direct&&APP_TARIFFS.has(tariff?.name)?APP_TARIFFS.get(tariff.name):null;
+    if((!direct&&!app)||attributes.country_code!=='CH'||attributes.currency!=='CHF'||typeof attributes.evse_id!=='string'||!attributes.evse_id)continue;
     let complete=Array.isArray(attributes.elements)&&attributes.elements.length>0;
     const components=[];
     for(const element of attributes.elements||[]){
@@ -29,15 +34,21 @@ export function buildFeed(payload,retrievedAt=new Date().toISOString()){
         components.push({type:component.type,price:component.price,step,from,until});
       }
     }
-    if(!complete)continue;
+    // Results promise a positive per-kWh price, so time-only or flat-only tariffs are left out.
+    if(!complete||!components.some(c=>c.type==='ENERGY'&&c.price>0))continue;
     const sourceTime=Date.parse(attributes.updated_at),updatedAt=Number.isFinite(sourceTime)?new Date(sourceTime).toISOString():new Date(retrieved).toISOString();
-    tariffs.push({id:String(record.id),evseId:attributes.evse_id,currency:'CHF',components,complete:true,directPayment:true,name:String(tariff?.name||emp?.name||'Direct payment').slice(0,120),updatedAt,verifiedAt:new Date(retrieved).toISOString(),timestampKind:'verified'});
+    tariffs.push({id:String(record.id),evseId:attributes.evse_id,currency:'CHF',components,complete:true,directPayment:!!direct,payment:direct?'direct':'app',name:String(app||tariff?.name||emp?.name||'Direct payment').slice(0,120),updatedAt,verifiedAt:new Date(retrieved).toISOString(),timestampKind:'verified'});
   }
   const unique=new Map();
   for(const item of tariffs)if(!unique.has(item.id))unique.set(item.id,item);
-  const output=[...unique.values()].sort((a,b)=>a.evseId.localeCompare(b.evseId)||a.id.localeCompare(b.id));
+  return [...unique.values()].sort((a,b)=>a.evseId.localeCompare(b.evseId)||a.id.localeCompare(b.id));
+}
+
+// Version 1 feed, kept unchanged for installed extensions up to 1.10.x: direct payment only.
+export function buildFeed(payload,retrievedAt=new Date().toISOString()){
+  const output=chargepriceTariffs(payload,retrievedAt).filter(item=>item.payment==='direct').map(({payment,...item})=>item);
   if(!output.length)throw new Error('No supported direct-payment tariffs were found; refusing to publish an empty feed.');
-  return {schemaVersion:1,provider:'swiss-emobility-charging-price-map',retrievedAt:new Date(retrieved).toISOString(),tariffCount:output.length,evseCount:new Set(output.map(item=>item.evseId)).size,license:'O-By-Ask; attribution required; commercial use requires prior permission from Swiss eMobility',source:{author:'Swiss eMobility',title:'Charging Price Map Swiss eMobility',url:'https://opendata.swiss/en/dataset/ladepreiskarte-swiss-emobility'},tariffs:output};
+  return {schemaVersion:1,provider:'swiss-emobility-charging-price-map',retrievedAt:new Date(Date.parse(retrievedAt)).toISOString(),tariffCount:output.length,evseCount:new Set(output.map(item=>item.evseId)).size,license:'O-By-Ask; attribution required; commercial use requires prior permission from Swiss eMobility',source:{author:'Swiss eMobility',title:'Charging Price Map Swiss eMobility',url:'https://opendata.swiss/en/dataset/ladepreiskarte-swiss-emobility'},tariffs:output};
 }
 
 const current=fileURLToPath(import.meta.url);

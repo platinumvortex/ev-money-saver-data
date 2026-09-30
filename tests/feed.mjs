@@ -18,3 +18,55 @@ assert.deepEqual(validateStationPayload(gzipSync(JSON.stringify(station)),1),{re
 assert.throws(()=>validateStationPayload(Buffer.from('{}'),1));
 console.log('✓ Feed publishes supported Swiss direct-payment tariffs only');
 console.log('✓ Federal station payload is validated before publication');
+
+// Version 2: app tariffs, eCarUp, operator pages and per-source carry-over.
+const {chargepriceTariffs}=await import('../scripts/build-feed.mjs');
+const {ecarupComponents,ecarupTariffs}=await import('../scripts/sources/ecarup.mjs');
+const {parseOperatorRates,operatorTariffs}=await import('../scripts/sources/operators.mjs');
+const {buildV2}=await import('../scripts/build-v2.mjs');
+const appFixture={...fixture,data:[...fixture.data,{id:'app',attributes:{country_code:'CH',evse_id:'CH*SWI*E1',currency:'CHF',elements:[{price_components:[{type:'ENERGY',price:0.55,step_size:1}],restrictions:null}]},relationships:{tariff:{data:{type:'tariff',id:'swisscharge'}}}},{id:'tcs',attributes:{country_code:'CH',evse_id:'CH*SWI*E1',currency:'CHF',elements:[{price_components:[{type:'ENERGY',price:0.45,step_size:1}],restrictions:null}]},relationships:{tariff:{data:{type:'tariff',id:'echarge'}}}}],included:[...fixture.included,{type:'tariff',id:'swisscharge',attributes:{name:'Swisscharge',is_direct_payment:false}},{type:'tariff',id:'echarge',attributes:{name:'eCharge',is_direct_payment:false}}]};
+const all=chargepriceTariffs(appFixture,'2026-09-24T12:00:00Z');
+assert.deepEqual(all.map(t=>[t.id,t.payment]),[['direct','direct'],['app','app']]);
+assert.equal(all[1].name,'Swisscharge app');
+const timeOnly={...appFixture,data:[{...appFixture.data.at(-2),id:'time-only',attributes:{...appFixture.data.at(-2).attributes,elements:[{price_components:[{type:'TIME',price:6,step_size:60}],restrictions:null}]}}]};
+assert.equal(chargepriceTariffs(timeOnly,'2026-09-24T12:00:00Z').length,0,'tariffs without a per-kWh price are left out');
+assert.equal(buildFeed(appFixture,'2026-09-24T12:00:00Z').tariffCount,1,'version 1 stays direct-only');
+console.log('✓ Swisscharge app tariffs are included as app payments; memberships stay excluded');
+
+const plug=(price,extra={})=>({AccessType:0,Price:{EnergyPrice:price,ParkingPrice:0,PenaltyPricePerMinute:null,PenaltyGracePeriodMinutes:null,Currency:'chf',...extra},PriceForecast:[]});
+assert.deepEqual(ecarupComponents(plug(0.5)),[{type:'ENERGY',price:0.5,step:1,from:0,until:null}]);
+assert.deepEqual(ecarupComponents(plug(0.5,{ParkingPrice:1.2}))[1],{type:'TIME',price:1.2,step:60,from:0,until:null});
+assert.deepEqual(ecarupComponents(plug(0.55,{PenaltyPricePerMinute:0.05,PenaltyGracePeriodMinutes:420}))[1],{type:'TIME',price:3,step:60,from:25200,until:null});
+assert.equal(ecarupComponents(plug(0.5,{Currency:'EUR'})),null);
+assert.equal(ecarupComponents({...plug(0.5),AccessType:1}),null);
+assert.equal(ecarupComponents(plug(0)),null);
+assert.equal(ecarupComponents(plug(0.5,{PenaltyPricePerMinute:0.1})),null,'penalty without a grace period is ambiguous');
+const flat={...plug(0.3),PriceForecast:[{EnergyPricePerKwh:0.3,ParkingPricePerHour:0,PenaltyPricePerMinute:0.05},{EnergyPricePerKwh:0.3,ParkingPricePerHour:0,PenaltyPricePerMinute:0}]};
+flat.Price.PenaltyGracePeriodMinutes=60;
+assert.equal(ecarupComponents(flat)[1].price,3,'varying blocking fee uses its highest rate');
+assert.equal(ecarupComponents({...flat,PriceForecast:[{EnergyPricePerKwh:0.3},{EnergyPricePerKwh:0.4}]}),null,'time-of-day energy prices are excluded');
+const detail=(id,price)=>({ID:'s',IsDisabled:false,Connectors:[{...plug(price),Hubject:{ID:id}}]});
+const ec=ecarupTariffs([detail('CH*ECU*A',0.4),detail('CH*ECU*B',0.4),detail('CH*ECU*B',0.5),detail('DE*ECU*C',0.4),detail('CH*ECU*D',0.4)],new Set(['CH*ECU*A','CH*ECU*B','DE*ECU*C']),'2026-09-24T12:00:00Z');
+assert.deepEqual(ec.map(t=>t.evseId),['CH*ECU*A'],'conflicting, foreign and unknown EVSEs are dropped');
+console.log('✓ eCarUp prices map exactly by EVSE ID, with parking and blocking fees');
+
+assert.deepEqual(parseOperatorRates('fastned','<div data-country-code="CH"><p>Standard price</p> CHF 0.75 in Switzerland</div>'),[{below:null,price:0.75}]);
+assert.throws(()=>parseOperatorRates('fastned','<div>nothing</div>'));
+const migrolHtml='Ohne Konto inkl. MwSt. M-Charge < 22 kW CHF 0.38 M-Charge < 64 kW CHF 0.48 M-Charge < 200 kW CHF 0.55 M-Charge < 400 kW CHF 0.59';
+const rates=parseOperatorRates('migrol',migrolHtml);
+const evses=new Map([['CH*MIG*1',{operator:'M-Charge',power:11}],['CH*MIG*2',{operator:'M-Charge',power:22}],['CH*MIG*3',{operator:'M-Charge',power:150}],['CH*MIG*4',{operator:'M-Charge',power:50}],['CH*OTH*1',{operator:'Other',power:50}]]);
+assert.deepEqual(operatorTariffs('migrol',rates,evses,new Set(['CH*MIG*4']),'2026-09-24T12:00:00Z').map(t=>[t.evseId,t.components[0].price]),[['CH*MIG*1',0.38],['CH*MIG*3',0.55]]);
+console.log('✓ Operator page prices apply by power band and never override per-EVSE data');
+
+const many=new Map(Array.from({length:1200},(_,i)=>[`CH*T*${i}`,{operator:'Test',power:50}]));
+const upstream=n=>({data:Array.from({length:n},(_,i)=>({id:`t${i}`,attributes:{country_code:'CH',evse_id:`CH*T*${i}`,currency:'CHF',elements:[{price_components:[{type:'ENERGY',price:0.5,step_size:1}],restrictions:null}]},relationships:{tariff:{data:{type:'tariff',id:'d'}}}})),included:[{type:'tariff',id:'d',attributes:{name:'Ad-hoc',is_direct_payment:true}}]});
+const quiet=()=>{};
+const first=await buildV2({evses:many,chargeprice:upstream(1100),ecarup:false,operators:false,now:'2026-09-24T12:00:00.000Z',log:quiet});
+assert.equal(first.schemaVersion,2);assert.equal(first.sources.chargeprice.status,'fresh');assert.equal(first.tariffs.length,1100);
+assert.equal(first.tariffs[0].verifiedAt,'2026-09-24T12:00:00.000Z');
+const carried=await buildV2({evses:many,chargeprice:null,previous:first,ecarup:false,operators:false,now:'2026-09-26T12:00:00.000Z',log:quiet});
+assert.equal(carried.sources.chargeprice.status,'carried');assert.equal(carried.tariffs[0].verifiedAt,'2026-09-24T12:00:00.000Z','carried prices keep their original check time');
+const collapsed=await buildV2({evses:many,chargeprice:upstream(1100),previous:{tariffs:[0,1,2].flatMap(k=>first.tariffs.map(t=>({...t,id:t.id+k})))},ecarup:false,operators:false,now:'2026-09-25T12:00:00.000Z',log:quiet});
+assert.equal(collapsed.sources.chargeprice.status,'carried','a sudden collapse keeps the previous prices');
+await assert.rejects(()=>buildV2({evses:many,chargeprice:null,previous:first,ecarup:false,operators:false,now:'2026-10-01T12:00:00.000Z',log:quiet}),/Refusing/,'expired carry-over is never published');
+console.log('✓ Failed sources keep recent prices with their original date; stale feeds are refused');

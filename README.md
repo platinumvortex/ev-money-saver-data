@@ -1,6 +1,28 @@
 # EV Money Saver data feed
 
-This small GitHub Pages project refreshes the official Swiss eMobility Charging Price Map and the federal Swiss charging-station catalogue once per day. It publishes `prices.json` and `stations.json` for EV Money Saver. Price output contains supported CHF direct-payment tariffs only. Subscription, membership, roaming, foreign-currency and unsupported conditional tariffs are omitted.
+This small GitHub Pages project refreshes Swiss charging prices and the federal Swiss charging-station catalogue once per day. It publishes:
+
+- `prices-v2.json`: every supported CHF ad-hoc tariff from all sources, keyed by federal EVSE ID (used by EV Money Saver 1.11+).
+- `prices.json`: version 1, Swiss eMobility direct-payment tariffs only, unchanged for installed 1.10.x extensions.
+- `stations.json`: the validated federal station catalogue.
+
+Subscription, membership, roaming, foreign-currency and unsupported conditional tariffs are omitted.
+
+## Price sources (`prices-v2.json`)
+
+| Source | What is included | Match |
+| --- | --- | --- |
+| Swiss eMobility Charging Price Map (Chargeprice open data) | Direct-payment tariffs; Swisscharge and Electra free-app tariffs | EVSE ID |
+| eCarUp public map (daily crawl of Swiss stations) | Energy price, hourly parking fee, blocking fee after a grace period | Hubject ID = EVSE ID |
+| Fastned, Migrol (M-Charge) tariff pages | Published standard ad-hoc price by power band | Operator + power |
+
+Each source fails independently: a failed or collapsed source (under half its previous size) keeps its previous tariffs while they are under six days old, with their original `verifiedAt`, and its status becomes `carried`. The build refuses to publish fewer than 1,000 tariffs. Run it locally with Node 20:
+
+```sh
+node scripts/build-v2.mjs --stations sfoe.json --chargeprice upstream.json --out docs/prices-v2.json
+```
+
+Every run also force-pushes the three feed files to the `feed` branch, which jsDelivr serves as an independent mirror (`https://cdn.jsdelivr.net/gh/platinumvortex/ev-money-saver-data@feed/prices-v2.json`), and re-enables the workflow's own schedule so GitHub's 60-day inactivity rule cannot switch off the daily refresh.
 
 Source: [Swiss eMobility — Charging Price Map](https://opendata.swiss/en/dataset/ladepreiskarte-swiss-emobility). The O-By-Ask licence requires attribution. Non-commercial use is permitted; obtain Swiss eMobility's prior permission before commercial use.
 
